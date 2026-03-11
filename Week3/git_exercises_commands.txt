@@ -1,0 +1,227 @@
+============================================================
+GIT COLLABORATION EXERCISES — COMPLETE COMMAND LIST
+============================================================
+
+TIP: Before starting, run this once to avoid the pull strategy hint:
+git config --global pull.rebase false
+
+============================================================
+QUICK RECAP
+============================================================
+
+# Create workspace folder and go inside
+mkdir RR_git2
+cd RR_git2
+
+# Create a repository and go inside
+git init RecapRepo
+cd RecapRepo
+
+# Set local user name
+git config --local user.name "RecapRepoUser"
+
+# Create three files
+echo "first file content" > file1.txt
+echo "second file content" > file2.txt
+echo "third file content" > file3.txt
+
+# Commit the first file
+git add file1.txt
+git commit -m "Added file1.txt"
+
+# Only stage the second file (don't commit)
+git add file2.txt
+
+# Do nothing to the third file (leave it untracked)
+
+# Check status — you'll see file2 staged, file3 untracked
+git status
+
+# Go back to RR_git2 and clone the repo
+cd ..
+git clone RecapRepo RecapRepoClone
+cd RecapRepoClone
+
+# View contents (only file1.txt is here — staged and untracked files don't clone)
+ls
+
+# Check status
+git status
+
+# View the config file
+cat .git/config
+
+
+============================================================
+EXERCISE 5: SETTING UP THE ENVIRONMENT
+============================================================
+
+# Make sure you're in RR_git2
+cd ..
+
+# 1. Create a bare central repository
+git init --bare CentralRepo
+
+# 2. Clone it as Dev1
+git clone CentralRepo Dev1
+
+# 3. Clone it as Dev2
+git clone CentralRepo Dev2
+
+# 4. Set Dev1 user name
+cd Dev1
+git config --local user.name "Developer_1"
+
+# 5. Set Dev2 user name
+cd ../Dev2
+git config --local user.name "Developer_2"
+
+
+============================================================
+KICKSTART: Dev1 creates first commit
+============================================================
+
+# Go to Dev1
+cd ../Dev1
+
+# Create a file, stage, commit, push
+echo "This will be the file with code" > code.R
+git add .
+git commit -m "Added the file with code"
+git push
+
+# Go to Dev2 and pull
+cd ../Dev2
+git pull
+
+
+============================================================
+EXERCISE 6: FETCHING AND UPDATING BEFORE PUSHING
+============================================================
+
+# 1-2. Dev1: create readme.txt, stage, commit, push
+cd ../Dev1
+touch readme.txt
+git add .
+git commit -m "Added readme.txt"
+git push
+
+# 3. Go to Dev2
+cd ../Dev2
+
+# 4. Check status (will say "up to date" — but it's stale!)
+git status
+
+# 5. Fetch, then check status again (now it correctly says "behind")
+git fetch
+git status
+
+# 6. Pull to actually update files
+git pull
+ls
+
+# 7. Edit readme.txt and create readme.md
+echo "second line of text" >> readme.txt
+touch readme.md
+
+# 8. Stage, commit, push
+git add .
+git commit -m "Added readme.md and changed readme.txt"
+git push
+
+# 9. Dev1: create text3.txt, commit, try to push
+cd ../Dev1
+echo "A line added by Dev1" > text3.txt
+git add .
+git commit -m "Added text3"
+git push
+# ^^^ This will be REJECTED! That's expected.
+
+# Pull first (auto-merge, no conflict — different files)
+git pull
+
+# Now push (this time it works)
+git push
+
+
+============================================================
+EXERCISE 7: MERGE CONFLICT
+============================================================
+
+# 1. Dev2: create a DIFFERENT text3.txt
+cd ../Dev2
+echo "A line added by Dev2" > text3.txt
+git add .
+git commit -m "Changes in text3.txt"
+
+# Try to push — REJECTED
+git push
+
+# Pull — this causes a MERGE CONFLICT
+git pull
+
+# 2. Resolve the conflict:
+
+# Open the file (Mac)
+open -e text3.txt
+# Or on Windows: notepad text3.txt
+# Or in terminal: nano text3.txt
+
+# Inside the file you'll see:
+# <<<<<<< HEAD
+# A line added by Dev1
+# =======
+# A line added by Dev2
+# >>>>>>> (some hash)
+#
+# Remove the marker lines (<<<, ===, >>>)
+# Keep the content you want (e.g. both lines)
+# Save and close
+
+# Mark as resolved, commit, push
+git add text3.txt
+git commit -m "Resolved merge conflict in text3.txt"
+git push
+
+
+============================================================
+ASSIGNMENT
+============================================================
+
+# Stay in Dev2 (or go there)
+cd ../Dev2
+
+# Pull to make sure you have everything
+git pull
+
+# Generate the assignment file
+git status > git2_a.txt
+git log >> git2_a.txt
+git ls-files >> git2_a.txt
+
+# Send git2_a.txt to z.usta@student.uw.edu.pl
+
+
+============================================================
+COMMON ISSUES
+============================================================
+
+STUCK IN VIM:
+  Press Esc, type :q! and press Enter
+
+TOUCH DOESN'T WORK (Windows):
+  Use: echo. > filename.txt
+  Or use Git Bash instead of Command Prompt
+
+PULL SHOWS HINT ABOUT DIVERGENT BRANCHES:
+  Run: git config --global pull.rebase false
+  Then try git pull again
+
+PUSH REJECTED:
+  Always: git pull first, then git push
+
+PULLING NOT POSSIBLE (UNMERGED FILES):
+  You're in a merge conflict. Edit the file, then:
+  git add filename
+  git commit -m "Resolved conflict"
+  git push

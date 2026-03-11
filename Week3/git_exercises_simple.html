@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Exercises — Commit Graphs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #fff;
+  color: #222;
+  font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+  padding: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+h1 span { color: #e34c26; }
+
+.subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #ddd;
+  margin-bottom: 0;
+}
+
+.tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  user-select: none;
+}
+
+.tab:hover { color: #444; }
+.tab.active { color: #e34c26; border-bottom-color: #e34c26; }
+
+/* Step nav */
+.step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.step-nav button {
+  padding: 6px 16px;
+  border: 1px solid #ccc;
+  background: #f8f8f8;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+}
+
+.step-nav button:hover { background: #eee; }
+.step-nav button:disabled { opacity: 0.3; cursor: default; }
+.step-counter { font-size: 13px; color: #999; }
+
+/* Command box */
+.cmd-box {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin: 16px 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.cmd-box .prompt { color: #6a9955; }
+.cmd-box .comment { color: #6a9955; }
+
+/* Description */
+.desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #444;
+  margin-bottom: 20px;
+}
+
+.desc code {
+  background: #f0f0f0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #c7254e;
+}
+
+/* Graph area */
+.graph-area {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.repo-col {
+  text-align: center;
+  min-width: 200px;
+}
+
+.repo-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 10px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.repo-title.dev1 { background: #dbeafe; color: #1d4ed8; }
+.repo-title.central { background: #d1fae5; color: #047857; }
+.repo-title.dev2 { background: #fee2e2; color: #b91c1c; }
+
+/* Commit graph using SVG */
+.graph-svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Arrow between repos */
+.arrow-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.arrow-label {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+.arrow-label.push { background: #dbeafe; color: #1d4ed8; }
+.arrow-label.pull { background: #d1fae5; color: #047857; }
+.arrow-label.rejected { background: #fee2e2; color: #b91c1c; }
+.arrow-label.conflict { background: #fef3c7; color: #92400e; }
+.arrow-label.inactive { background: #f3f3f3; color: #bbb; }
+
+.arrow-line {
+  width: 60px;
+  height: 2px;
+  background: #ccc;
+}
+
+.arrow-line.active { background: #666; }
+
+/* Conflict display */
+.conflict-display {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #92400e;
+  white-space: pre;
+}
+
+.not-created {
+  color: #bbb;
+  font-style: italic;
+  font-size: 13px;
+  padding: 30px 0;
+}
+
+.files-list {
+  text-align: left;
+  margin: 8px auto;
+  max-width: 160px;
+}
+
+.file-item {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  padding: 2px 0;
+  color: #555;
+}
+
+.file-item.new { color: #047857; }
+.file-item.modified { color: #b45309; }
+.file-item.conflict { color: #b91c1c; font-weight: 700; }
+
+</style>
+</head>
+<body>
+
+<h1><span>Git</span> Exercises — Step by Step</h1>
+<p class="subtitle">Commit graphs for Exercises 5, 6, and 7</p>
+
+<div class="tabs" id="tabs"></div>
+<div class="step-nav" id="stepNav"></div>
+<div id="content"></div>
+
+<script>
+const C = {
+  dev1: '#3b82f6',
+  central: '#10b981',
+  dev2: '#ef4444',
+  merge: '#f59e0b',
+  node: '#fff',
+  line: '#888',
+  bg: '#f9fafb'
+};
+
+const exercises = {
+  "Exercise 5": {
+    subtitle: "Setup",
+    steps: [
+      {
+        title: "Create bare CentralRepo",
+        cmd: "$ git init --bare CentralRepo",
+        desc: "A <code>bare</code> repository has no working directory. It's our \"server\" — only receives pushes and serves pulls.",
+        dev1: null,
+        central: { commits: [], files: [] },
+        dev2: null,
+        action: null
+      },
+      {
+        title: "Clone as Dev1",
+        cmd: "$ git clone CentralRepo Dev1",
+        desc: "Dev1 clones the empty central repo. The <code>origin</code> remote is set automatically.",
+        dev1: { commits: [], files: [] },
+        central: { commits: [], files: [] },
+        dev2: null,
+        action: { from: 'central', to: 'dev1', label: 'clone' }
+      },
+      {
+        title: "Clone as Dev2",
+        cmd: "$ git clone CentralRepo Dev2",
+        desc: "Dev2 also clones. Now we have two workspaces and one central hub.",
+        dev1: { commits: [], files: [] },
+        central: { commits: [], files: [] },
+        dev2: { commits: [], files: [] },
+        action: { from: 'central', to: 'dev2', label: 'clone' }
+      },
+      {
+        title: "Set user names",
+        cmd: '$ git config --local user.name "Developer_1"  # in Dev1\n$ git config --local user.name "Developer_2"  # in Dev2',
+        desc: "Local <code>user.name</code> so we can tell who made each commit.",
+        dev1: { commits: [], files: [], label: 'user: Developer_1' },
+        central: { commits: [], files: [] },
+        dev2: { commits: [], files: [], label: 'user: Developer_2' },
+        action: null
+      }
+    ]
+  },
+  "Exercise 6": {
+    subtitle: "Push, Fetch, Pull",
+    steps: [
+      {
+        title: "Dev1 creates code.R → commit → push",
+        cmd: '$ echo "This will be the file with code" > code.R\n$ git add . && git commit -m "Added the file with code"\n$ git push',
+        desc: "Dev1 makes the first commit and pushes it to CentralRepo.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'] },
+        dev2: { commits: [], files: [] },
+        action: { from: 'dev1', to: 'central', label: 'push', type: 'push' }
+      },
+      {
+        title: "Dev2 pulls",
+        cmd: "$ git pull",
+        desc: "Dev2 gets up to speed. All three repos now have commit A.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'] },
+        action: { from: 'central', to: 'dev2', label: 'pull', type: 'pull' }
+      },
+      {
+        title: "Dev1 creates readme.txt → commit → push",
+        cmd: '$ touch readme.txt\n$ git add . && git commit -m "Added readme.txt"\n$ git push',
+        desc: "Dev1 adds another file. CentralRepo has A→B now. Dev2 doesn't know yet.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'], behind: true },
+        action: { from: 'dev1', to: 'central', label: 'push', type: 'push' }
+      },
+      {
+        title: "Dev2: git status (stale!)",
+        cmd: '$ git status\nOn branch main\nYour branch is up to date with \'origin/main\'.',
+        desc: "<code>git status</code> only checks local knowledge. Dev2 hasn't fetched, so it falsely reports \"up to date\".",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'], behind: true, stale: true },
+        action: null
+      },
+      {
+        title: "Dev2: git fetch → git status",
+        cmd: '$ git fetch\n$ git status\nYour branch is behind \'origin/main\' by 1 commit.',
+        desc: "<code>fetch</code> downloads info but doesn't change files. Now status correctly reports being behind.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'}], files: ['code.R'], behind: true },
+        action: { from: 'central', to: 'dev2', label: 'fetch', type: 'pull' }
+      },
+      {
+        title: "Dev2: git pull",
+        cmd: "$ git pull\n$ ls\ncode.R  readme.txt",
+        desc: "<code>pull</code> = fetch + merge. Files update. All repos in sync again.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'] },
+        action: { from: 'central', to: 'dev2', label: 'pull', type: 'pull' }
+      },
+      {
+        title: "Dev2 edits readme.txt, adds readme.md → push",
+        cmd: '$ echo "second line" >> readme.txt\n$ touch readme.md\n$ git add . && git commit -m "Added readme.md, changed readme.txt"\n$ git push',
+        desc: "Dev2 pushes commit C. Dev1 is now behind.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'}], files: ['code.R','readme.txt'], behind: true },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'}], files: ['code.R','readme.txt','readme.md'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'}], files: ['code.R','readme.txt','readme.md'] },
+        action: { from: 'dev2', to: 'central', label: 'push', type: 'push' }
+      },
+      {
+        title: "Dev1 creates text3.txt → commit → push REJECTED",
+        cmd: '$ echo "A line added by Dev1" > text3.txt\n$ git add . && git commit -m "Added text3"\n$ git push\n! [rejected] main -> main (fetch first)',
+        desc: "Push rejected! CentralRepo has commit C that Dev1 doesn't have. The branches have <strong>diverged</strong>:",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'D', msg:'Added text3', who:'dev1'}], files: ['code.R','readme.txt','text3.txt'], diverged: true },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'}], files: ['code.R','readme.txt','readme.md'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'}], files: ['code.R','readme.txt','readme.md'] },
+        action: { from: 'dev1', to: 'central', label: 'REJECTED', type: 'rejected' },
+        showDivergence: true
+      },
+      {
+        title: "Dev1 pulls (auto-merge) → push",
+        cmd: "$ git pull\nMerge made by the 'ort' strategy.\n$ git push",
+        desc: "No conflict — changes are in different files. Git creates a merge commit M that ties the histories back together.",
+        dev1: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'},{h:'D', msg:'Added text3', who:'dev1'},{h:'M', msg:'Merge', who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'], merged: true },
+        central: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'},{h:'D', msg:'Added text3', who:'dev1'},{h:'M', msg:'Merge', who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        dev2: { commits: [{h:'A', msg:'Added code.R', who:'dev1'},{h:'B', msg:'Added readme.txt', who:'dev1'},{h:'C', msg:'Added readme.md', who:'dev2'}], files: ['code.R','readme.txt','readme.md'], behind: true },
+        action: { from: 'dev1', to: 'central', label: 'pull + push', type: 'push' }
+      }
+    ]
+  },
+  "Exercise 7": {
+    subtitle: "Merge Conflict",
+    steps: [
+      {
+        title: "Dev2 creates DIFFERENT text3.txt → commit",
+        cmd: '$ echo "A line added by Dev2" > text3.txt\n$ git add . && git commit -m "Changes in text3.txt"',
+        desc: "Dev2 hasn't pulled — doesn't know Dev1 already created text3.txt with different content.",
+        dev1: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        central: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        dev2: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'E', msg:'text3 (Dev2 version)',who:'dev2'}], files: ['code.R','readme.txt','readme.md','text3.txt'], diverged: true },
+        action: null,
+        showDivergence7: true
+      },
+      {
+        title: "Dev2 push → REJECTED",
+        cmd: "$ git push\n! [rejected] main -> main (fetch first)",
+        desc: "Same as before — remote has commits Dev2 doesn't have.",
+        dev1: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        central: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        dev2: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'E',who:'dev2'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        action: { from: 'dev2', to: 'central', label: 'REJECTED', type: 'rejected' }
+      },
+      {
+        title: "Dev2 pulls → CONFLICT!",
+        cmd: "$ git pull\nCONFLICT (add/add): Merge conflict in text3.txt",
+        desc: "Auto-merge fails! Both devs created <code>text3.txt</code> with different content. You must resolve manually.",
+        dev1: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        central: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        dev2: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'E',who:'dev2'}], files: ['code.R','readme.txt','readme.md',{name:'text3.txt',state:'conflict'}], conflicting: true },
+        action: { from: 'central', to: 'dev2', label: 'CONFLICT', type: 'conflict' },
+        showConflict: true
+      },
+      {
+        title: "Dev2 resolves → commit → push",
+        cmd: '$ nano text3.txt   # remove markers, keep both lines\n$ git add text3.txt\n$ git commit -m "Resolved merge conflict"\n$ git push',
+        desc: "Edit the file, remove the <code>&lt;&lt;&lt;</code> / <code>===</code> / <code>&gt;&gt;&gt;</code> markers, keep what you want. Stage, commit, push. Done!",
+        dev1: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'], behind: true },
+        central: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'},{h:'E',who:'dev2'},{h:'M2',msg:'Resolved conflict',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'] },
+        dev2: { commits: [{h:'A',who:'dev1'},{h:'B',who:'dev1'},{h:'C',who:'dev2'},{h:'D',who:'dev1'},{h:'M',who:'merge'},{h:'E',who:'dev2'},{h:'M2',msg:'Resolved conflict',who:'merge'}], files: ['code.R','readme.txt','readme.md','text3.txt'], resolved: true },
+        action: { from: 'dev2', to: 'central', label: 'push', type: 'push' }
+      }
+    ]
+  }
+};
+
+let curEx = Object.keys(exercises)[0];
+let curStep = 0;
+
+function colorForWho(who) {
+  if (who === 'dev1') return C.dev1;
+  if (who === 'dev2') return C.dev2;
+  if (who === 'merge') return C.merge;
+  return '#999';
+}
+
+function drawGraph(commits, opts = {}) {
+  if (!commits || commits.length === 0) {
+    return '<div class="not-created" style="padding:20px 0;color:#bbb;">No commits yet</div>';
+  }
+
+  const r = 16;
+  const spacing = 44;
+  const padX = 30;
+  const padY = 28;
+  const w = 200;
+  const h = padY + commits.length * spacing + 10;
+
+  let svg = `<svg class="graph-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+
+  // Draw connecting lines
+  for (let i = 1; i < commits.length; i++) {
+    const x = w / 2;
+    const y1 = padY + (i - 1) * spacing;
+    const y2 = padY + i * spacing;
+
+    // Check if this is a merge commit (show fork)
+    if (commits[i].h === 'M' && opts.merged) {
+      // Draw two lines merging into M
+      svg += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${C.line}" stroke-width="2"/>`;
+      svg += `<line x1="${x - 40}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${C.line}" stroke-width="2" stroke-dasharray="4"/>`;
+    } else if (commits[i].h === 'M2' && opts.resolved) {
+      svg += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${C.merge}" stroke-width="2"/>`;
+    } else {
+      svg += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${C.line}" stroke-width="2"/>`;
+    }
+  }
+
+  // Draw nodes
+  commits.forEach((c, i) => {
+    const x = w / 2;
+    const y = padY + i * spacing;
+    const col = colorForWho(c.who);
+
+    svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="${col}" stroke="#fff" stroke-width="2"/>`;
+    svg += `<text x="${x}" y="${y + 1}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="Courier New, monospace">${c.h}</text>`;
+
+    // Label on right
+    if (c.msg) {
+      svg += `<text x="${x + r + 8}" y="${y + 1}" dominant-baseline="middle" fill="#666" font-size="10" font-family="sans-serif">${c.msg.substring(0, 20)}</text>`;
+    }
+  });
+
+  // Divergence indicator
+  if (opts.diverged) {
+    const lastY = padY + (commits.length - 1) * spacing;
+    svg += `<text x="${w/2}" y="${lastY + 30}" text-anchor="middle" fill="#b91c1c" font-size="10" font-weight="600">⚠ diverged</text>`;
+  }
+  if (opts.behind) {
+    const lastY = padY + (commits.length - 1) * spacing;
+    svg += `<text x="${w/2}" y="${lastY + 30}" text-anchor="middle" fill="#6b7280" font-size="10">behind</text>`;
+  }
+  if (opts.stale) {
+    const lastY = padY + (commits.length - 1) * spacing;
+    svg += `<text x="${w/2}" y="${lastY + 30}" text-anchor="middle" fill="#b45309" font-size="10">⚠ "up to date" (stale)</text>`;
+  }
+  if (opts.conflicting) {
+    const lastY = padY + (commits.length - 1) * spacing;
+    svg += `<text x="${w/2}" y="${lastY + 30}" text-anchor="middle" fill="#b91c1c" font-size="11" font-weight="700">⚠ CONFLICT</text>`;
+  }
+
+  svg += '</svg>';
+  return svg;
+}
+
+function drawFiles(files) {
+  if (!files || files.length === 0) return '';
+  let html = '<div class="files-list">';
+  files.forEach(f => {
+    if (typeof f === 'string') {
+      html += `<div class="file-item">📄 ${f}</div>`;
+    } else {
+      const cls = f.state || '';
+      const icon = f.state === 'conflict' ? '⚠️' : '📄';
+      html += `<div class="file-item ${cls}">${icon} ${f.name} ${f.state ? '(' + f.state + ')' : ''}</div>`;
+    }
+  });
+  html += '</div>';
+  return html;
+}
+
+function drawAction(action) {
+  if (!action) return '';
+  
+  const typeClass = action.type || 'inactive';
+  
+  if (action.from === 'dev1' && action.to === 'central') {
+    return `<div class="arrow-row">
+      <div style="width:200px;text-align:center">
+        <span class="arrow-label ${typeClass}">${action.label} →</span>
+      </div>
+      <div style="width:200px"></div>
+    </div>`;
+  }
+  if (action.from === 'central' && action.to === 'dev1') {
+    return `<div class="arrow-row">
+      <div style="width:200px;text-align:center">
+        <span class="arrow-label ${typeClass}">← ${action.label}</span>
+      </div>
+      <div style="width:200px"></div>
+    </div>`;
+  }
+  if (action.from === 'dev2' && action.to === 'central') {
+    return `<div class="arrow-row">
+      <div style="width:200px"></div>
+      <div style="width:200px;text-align:center">
+        <span class="arrow-label ${typeClass}">← ${action.label}</span>
+      </div>
+    </div>`;
+  }
+  if (action.from === 'central' && action.to === 'dev2') {
+    return `<div class="arrow-row">
+      <div style="width:200px"></div>
+      <div style="width:200px;text-align:center">
+        <span class="arrow-label ${typeClass}">${action.label} →</span>
+      </div>
+    </div>`;
+  }
+  return '';
+}
+
+function render() {
+  // Tabs
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = '';
+  Object.keys(exercises).forEach(name => {
+    const t = document.createElement('div');
+    t.className = `tab${name === curEx ? ' active' : ''}`;
+    t.textContent = `${name}: ${exercises[name].subtitle}`;
+    t.onclick = () => { curEx = name; curStep = 0; render(); };
+    tabsEl.appendChild(t);
+  });
+
+  const steps = exercises[curEx].steps;
+  const step = steps[curStep];
+
+  // Step nav
+  document.getElementById('stepNav').innerHTML = `
+    <button id="prevBtn" ${curStep === 0 ? 'disabled' : ''}>← Prev</button>
+    <span class="step-counter">Step ${curStep + 1} / ${steps.length}: <strong>${step.title}</strong></span>
+    <button id="nextBtn" ${curStep === steps.length - 1 ? 'disabled' : ''}>Next →</button>
+  `;
+  document.getElementById('prevBtn').onclick = () => { if (curStep > 0) { curStep--; render(); } };
+  document.getElementById('nextBtn').onclick = () => { if (curStep < steps.length - 1) { curStep++; render(); } };
+
+  // Content
+  const content = document.getElementById('content');
+
+  let cmdHtml = step.cmd.split('\n').map(l => {
+    if (l.startsWith('$')) return `<span class="prompt">$ </span>${l.substring(2)}`;
+    if (l.startsWith('#') || l.includes('#')) return `<span class="comment">${l}</span>`;
+    return l;
+  }).join('\n');
+
+  let graphsHtml = '<div class="graph-area">';
+
+  // Dev1
+  graphsHtml += '<div class="repo-col">';
+  graphsHtml += '<span class="repo-title dev1">Dev1</span>';
+  if (step.dev1 === null) {
+    graphsHtml += '<div class="not-created">not created yet</div>';
+  } else {
+    graphsHtml += drawGraph(step.dev1.commits, { diverged: step.dev1.diverged, behind: step.dev1.behind, merged: step.dev1.merged, stale: step.dev1.stale });
+    graphsHtml += drawFiles(step.dev1.files);
+  }
+  graphsHtml += '</div>';
+
+  // Central
+  graphsHtml += '<div class="repo-col">';
+  graphsHtml += '<span class="repo-title central">Central</span>';
+  if (step.central === null) {
+    graphsHtml += '<div class="not-created">not created yet</div>';
+  } else {
+    graphsHtml += drawGraph(step.central.commits);
+    graphsHtml += drawFiles(step.central.files);
+  }
+  graphsHtml += '</div>';
+
+  // Dev2
+  graphsHtml += '<div class="repo-col">';
+  graphsHtml += '<span class="repo-title dev2">Dev2</span>';
+  if (step.dev2 === null) {
+    graphsHtml += '<div class="not-created">not created yet</div>';
+  } else {
+    graphsHtml += drawGraph(step.dev2.commits, { diverged: step.dev2.diverged, behind: step.dev2.behind, conflicting: step.dev2.conflicting, resolved: step.dev2.resolved, stale: step.dev2.stale });
+    graphsHtml += drawFiles(step.dev2.files);
+  }
+  graphsHtml += '</div>';
+  graphsHtml += '</div>';
+
+  // Divergence diagram
+  let divergeHtml = '';
+  if (step.showDivergence) {
+    divergeHtml = `<div style="text-align:center;margin:10px 0;">
+      <svg width="260" height="100" viewBox="0 0 260 100">
+        <circle cx="60" cy="50" r="14" fill="${C.line}" stroke="#fff" stroke-width="2"/>
+        <text x="60" y="51" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="monospace">B</text>
+        <line x1="74" y1="40" x2="130" y2="20" stroke="${C.dev2}" stroke-width="2"/>
+        <circle cx="140" cy="18" r="14" fill="${C.dev2}" stroke="#fff" stroke-width="2"/>
+        <text x="140" y="19" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="monospace">C</text>
+        <text x="170" y="22" fill="${C.dev2}" font-size="10">Central</text>
+        <line x1="74" y1="60" x2="130" y2="80" stroke="${C.dev1}" stroke-width="2"/>
+        <circle cx="140" cy="80" r="14" fill="${C.dev1}" stroke="#fff" stroke-width="2"/>
+        <text x="140" y="81" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="monospace">D</text>
+        <text x="170" y="84" fill="${C.dev1}" font-size="10">Dev1</text>
+      </svg>
+      <div style="font-size:12px;color:#666;">Diverged: both sides have commits the other doesn't</div>
+    </div>`;
+  }
+
+  if (step.showDivergence7) {
+    divergeHtml = `<div style="text-align:center;margin:10px 0;">
+      <svg width="280" height="100" viewBox="0 0 280 100">
+        <circle cx="50" cy="50" r="14" fill="${C.line}" stroke="#fff" stroke-width="2"/>
+        <text x="50" y="51" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="monospace">C</text>
+        <line x1="64" y1="38" x2="130" y2="18" stroke="${C.merge}" stroke-width="2"/>
+        <circle cx="140" cy="16" r="14" fill="${C.merge}" stroke="#fff" stroke-width="2"/>
+        <text x="140" y="17" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="10" font-weight="700" font-family="monospace">D+M</text>
+        <text x="170" y="20" fill="${C.merge}" font-size="10">Central</text>
+        <line x1="64" y1="62" x2="130" y2="82" stroke="${C.dev2}" stroke-width="2"/>
+        <circle cx="140" cy="82" r="14" fill="${C.dev2}" stroke="#fff" stroke-width="2"/>
+        <text x="140" y="83" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="700" font-family="monospace">E</text>
+        <text x="170" y="86" fill="${C.dev2}" font-size="10">Dev2</text>
+      </svg>
+      <div style="font-size:12px;color:#666;">Same file (text3.txt) with different content on each side!</div>
+    </div>`;
+  }
+
+  // Conflict content
+  let conflictHtml = '';
+  if (step.showConflict) {
+    conflictHtml = `<div class="conflict-display"><<<<<<< HEAD (from Central/Dev1)
+A line added by Dev1
+=======
+A line added by Dev2
+>>>>>>> (Dev2's commit)</div>`;
+  }
+
+  content.innerHTML = `
+    <div class="cmd-box">${cmdHtml}</div>
+    <div class="desc">${step.desc}</div>
+    ${drawAction(step.action)}
+    ${graphsHtml}
+    ${divergeHtml}
+    ${conflictHtml}
+  `;
+}
+
+document.addEventListener('keydown', e => {
+  const steps = exercises[curEx].steps;
+  if (e.key === 'ArrowRight') { if (curStep < steps.length - 1) { curStep++; render(); } }
+  if (e.key === 'ArrowLeft') { if (curStep > 0) { curStep--; render(); } }
+});
+
+render();
+</script>
+</body>
+</html>
